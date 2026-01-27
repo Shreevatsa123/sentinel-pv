@@ -1,9 +1,20 @@
-.DS_Store
-__pycache__/
-*.env
-.terraform/
+# .gitignore
+
+# Terraform (Sensitive State - NEVER COMMIT THESE)
 *.tfstate
 *.tfstate.backup
-1_data_science/data/
-1_data_science/models/
+.terraform/
+.terraform.lock.hcl
+
+# Python
+__pycache__/
+*.py[cod]
 venv/
+.env
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
