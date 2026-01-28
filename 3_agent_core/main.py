@@ -23,6 +23,7 @@ BIOBERT_MODEL = "Shreevatsa01/biobert-v2-hybrid-slang"
 # 2. DEFINE THE STATE
 class AgentState(TypedDict):
     post_text: str
+    target_drug: str
     detected_entities: List[str]
     rag_evidence: List[str]
     final_report: str
@@ -36,40 +37,58 @@ def detector_node(state: AgentState):
     print(f"   ✅ Found: {symptoms}")
     return {"detected_entities": symptoms}
 
+# In main.py
 def investigator_node(state: AgentState):
     symptoms = state.get("detected_entities", [])
+    # We need to extract the drug name from the post to filter
+    target_drug = state.get("target_drug", "Ozempic") 
+    
     if not symptoms: return {"rag_evidence": []}
     
-    print(f"🕵️ [Investigator]: Searching FDA Knowledge Base for {symptoms}...")
+    print(f"🕵️ [Investigator]: Searching FDA Base for {symptoms} specifically for {target_drug}...")
     embedding_fn = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = Chroma(persist_directory=DB_PATH, embedding_function=embedding_fn, collection_name="fda_drug_labels")
     
     evidence = []
+    # apply a metadata filter so we only get chunks for the specific drug
     for symptom in symptoms:
-        docs = vectorstore.similarity_search(symptom, k=2)
-        evidence.extend([doc.page_content for doc in docs])
+        docs = vectorstore.similarity_search(
+            symptom, 
+            k=2, 
+            filter={"drug_name": target_drug} # This matches your ingestion metadata
+        )
+        evidence.extend([f"[{target_drug} FDA Label]: {doc.page_content}" for doc in docs])
+    
     return {"rag_evidence": evidence}
 
 def analyst_node(state: AgentState):
-    print("🧠 [Analyst]: Generating Report with Llama 3...")
+    print(f"🧠 [Analyst]: Comparing Reddit report to {state['target_drug']} official labels...")
     llm = ChatOllama(model="llama3.2:1b", temperature=0)
     
     prompt = ChatPromptTemplate.from_template("""
-    You are a Pharmacovigilance Expert. 
+    You are a Pharmacovigilance Expert.
+    DRUG BEING ANALYZED: {drug}
     USER POST: "{post}"
     DETECTED SYMPTOMS: {symptoms}
-    FDA EVIDENCE: {evidence}
+    FDA EVIDENCE FOR {drug}: {evidence}
     
-    Determine if these are KNOWN side effects or POTENTIAL NEW SIGNALS.
+    VERDICT CRITERIA:
+    1. If a symptom is in the FDA Evidence, it is a KNOWN SIDE EFFECT for {drug}.
+    2. If a symptom is NOT in the FDA Evidence, it is a POTENTIAL NEW SIGNAL.
+    
+    Provide a concise report including the drug name.
     """)
     
+    # ADD THESE LINES:
     chain = prompt | llm
     response = chain.invoke({
+        "drug": state['target_drug'],
         "post": state['post_text'],
         "symptoms": ", ".join(state['detected_entities']),
-        "evidence": "\n".join(state['rag_evidence'][:3])
+        "evidence": "\n".join(state['rag_evidence'])
     })
     return {"final_report": response.content}
+
 
 # 4. BUILD THE GRAPH
 workflow = StateGraph(AgentState)

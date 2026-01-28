@@ -13,6 +13,7 @@ app = FastAPI()
 
 class AnalysisRequest(BaseModel):
     text: str
+    drug_name: str # <--- ADD THIS LINEr
 
 @app.get("/")
 def health_check():
@@ -20,9 +21,13 @@ def health_check():
 
 @app.post("/analyze")
 def run_analysis(request: AnalysisRequest):
-    print(f"📡 Received request from n8n: {request.text}")
-    # Run the LangGraph agent
-    result = agent_graph.invoke({"post_text": request.text})
+    print(f"📡 Received request for {request.drug_name}: {request.text}")
+    
+    # Pass the drug_name into the state so main.py can use it for RAG filtering
+    result = agent_graph.invoke({
+        "post_text": request.text, 
+        "target_drug": request.drug_name
+    })
     return {"report": result["final_report"]}
 
 if __name__ == "__main__":
