@@ -1,5 +1,3 @@
-# .gitignore
-
 # Terraform (Sensitive State - NEVER COMMIT THESE)
 *.tfstate
 *.tfstate.backup
@@ -17,6 +15,9 @@ venv/
 
 # IDE
 .vscode/
-.idea/"chroma_db_storage/" 
-"chroma_db_storage/" 
-"*.pdf"   # Also ignore the downloaded PDFs
+
+# Local Database
+chroma_db_storage/
+
+# Downloaded PDFs
+*.pdf
