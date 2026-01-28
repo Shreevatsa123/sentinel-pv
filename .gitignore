@@ -17,4 +17,6 @@ venv/
 
 # IDE
 .vscode/
-.idea/
+.idea/"chroma_db_storage/" 
+"chroma_db_storage/" 
+*.pdf   # Also ignore the downloaded PDFs
