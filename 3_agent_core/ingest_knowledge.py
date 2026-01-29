@@ -1,9 +1,11 @@
 import os
 import requests
 import sys
+import shutil
 
 # --- 2026 PYDANTIC COMPATIBILITY ---
 import pydantic
+from pydantic_settings import BaseSettings
 import pydantic.v1
 sys.modules['pydantic.env_settings'] = pydantic.v1
 # -----------------------------------
@@ -13,12 +15,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
-# 1. CONFIGURATION - Path set to project root (one level up from 3_agent_core)
-# This creates the folder in Sentinel-PV/5_FDA_drug_data
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "5_FDA_drug_data")
-DB_PATH = os.path.join(BASE_DIR, "chroma_db_storage")
+# 1. CONFIGURATION
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "../5_FDA_drug_data") 
+DB_PATH = os.path.join(BASE_DIR, "chroma_db_local")     
 
+# --- COMPLETE LIST OF DRUGS (No more manual adding) ---
 DRUG_LABELS = {
     "Ozempic": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2017/209637lbl.pdf",
     "Wegovy": "https://www.accessdata.fda.gov/drugsatfda_docs/label/2021/215256s000lbl.pdf",
@@ -48,41 +50,48 @@ def setup_directories():
         os.makedirs(DATA_DIR)
 
 def download_labels():
+    print(f"\n⬇️ Starting Downloads to {DATA_DIR}...")
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
     for drug, url in DRUG_LABELS.items():
         file_path = os.path.join(DATA_DIR, f"{drug}_FDA_Label.pdf")
         
+        # Check if exists and is valid PDF
         if os.path.exists(file_path):
-            # Check if file is valid (not an HTML error page)
-            with open(file_path, "rb") as f:
-                header = f.read(5)
-                if header == b"%PDF-":
-                    print(f"⏩ {drug} label already exists and is valid. Skipping.")
-                    continue
-                else:
-                    print(f"⚠️ {drug} file is corrupted/HTML. Redownloading...")
-                    os.remove(file_path)
+            try:
+                with open(file_path, "rb") as f:
+                    if f.read(5) == b"%PDF-":
+                        print(f"   ⏩ {drug} exists. Skipping.")
+                        continue
+            except:
+                pass # If error, just re-download
             
-        print(f"⬇️ Downloading {drug} label...")
+        print(f"   ⬇️ Downloading {drug}...")
         try:
-            headers = {"User-Agent": "Mozilla/5.0"}
-            response = requests.get(url, headers=headers, timeout=20)
+            response = requests.get(url, headers=headers, timeout=30)
             if response.status_code == 200:
                 with open(file_path, "wb") as f:
                     f.write(response.content)
-                print(f"✅ {drug} downloaded.")
             else:
-                print(f"❌ HTTP {response.status_code} for {drug}. Skipping.")
+                print(f"   ❌ Failed {drug}: HTTP {response.status_code}")
         except Exception as e:
-            print(f"❌ Failed to download {drug}: {e}")
+            print(f"   ❌ Error {drug}: {e}")
 
 def ingest_data():
     setup_directories()
     download_labels()
     
+    # --- CRITICAL FIX: FORCE CPU FOR EMBEDDINGS ---
+    print(f"\n⏳ Loading Embedding Model (Safe CPU Mode)...")
+    embedding_fn = HuggingFaceEmbeddings(
+        model_name="all-MiniLM-L6-v2",
+        model_kwargs={'device': 'cpu'} # <--- PREVENTS CRASH
+    )
+    
     all_chunks = []
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     
-    print("\n📖 Processing PDF files...")
+    print("\n📖 Processing PDFs...")
     for drug in DRUG_LABELS.keys():
         file_path = os.path.join(DATA_DIR, f"{drug}_FDA_Label.pdf")
         if not os.path.exists(file_path): continue
@@ -90,23 +99,33 @@ def ingest_data():
         try:
             loader = PyPDFLoader(file_path)
             docs = loader.load()
+            # Tag metadata so the Agent knows which drug this is
             for doc in docs:
                 doc.metadata["drug_name"] = drug
+                doc.metadata["source"] = f"{drug} FDA Label"
+            
             chunks = text_splitter.split_documents(docs)
             all_chunks.extend(chunks)
+            print(f"   📄 Processed {drug}: {len(chunks)} chunks.")
         except Exception as e:
-            print(f"⚠️ Skipping {drug} due to read error: {e}")
+            print(f"   ⚠️ Error reading {drug}: {e}")
 
     if all_chunks:
-        print(f"🧠 Indexing {len(all_chunks)} chunks into ChromaDB...")
-        embedding_fn = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        print(f"\n🧠 Indexing {len(all_chunks)} chunks into ChromaDB...")
+        
+        # Clear old DB to prevent duplicates
+        if os.path.exists(DB_PATH):
+            shutil.rmtree(DB_PATH)
+            
         vectorstore = Chroma.from_documents(
             documents=all_chunks, 
             embedding=embedding_fn, 
             persist_directory=DB_PATH,
             collection_name="fda_drug_labels"
         )
-        print(f"🎉 Success! Multi-drug base populated at {DB_PATH}")
+        print(f"🎉 Success! Real FDA Knowledge Base built at: {DB_PATH}")
+    else:
+        print("❌ No data found to ingest.")
 
 if __name__ == "__main__":
     ingest_data()

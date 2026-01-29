@@ -18,6 +18,6 @@ venv/
 
 # Local Database
 chroma_db_storage/
+chroma_db_local/
 
-# Downloaded PDFs
-*.pdf
+5_FDA_drug_data/
