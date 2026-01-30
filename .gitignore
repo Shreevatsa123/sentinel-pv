@@ -21,3 +21,6 @@ chroma_db_storage/
 chroma_db_local/
 
 5_FDA_drug_data/
+
+rl_feedback_log.jsonl
+gold_standard.jsonl

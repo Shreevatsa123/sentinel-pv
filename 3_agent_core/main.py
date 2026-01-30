@@ -1,7 +1,8 @@
 import os
 import sys
 import torch
-from typing import TypedDict, List
+import json
+from typing import TypedDict, List, Dict
 from langgraph.graph import StateGraph, END
 
 # --- 2026 COMPATIBILITY PATCH ---
@@ -12,19 +13,21 @@ sys.modules['pydantic.env_settings'] = pydantic.v1
 # ---------------------------------
 
 from transformers import AutoTokenizer, AutoModelForTokenClassification
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 from langchain_chroma import Chroma
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
 
 # ==========================================
 # 1. CONFIGURATION
 # ==========================================
 DB_PATH = "./chroma_db_local" 
 BIOBERT_MODEL = "Shreevatsa01/sentinel-v3-final"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
-# MASTER DRUG LIST 
+# UPGRADE: Using a smarter model for "slang understanding"
+EMBEDDING_MODEL = "all-mpnet-base-v2" 
+
 KNOWN_DRUGS = [
     "Ozempic", "Wegovy", "Mounjaro", "Zepbound", "Trulicity", 
     "Victoza", "Rybelsus", "Jardiance", "Farxiga", "Januvia", 
@@ -32,211 +35,208 @@ KNOWN_DRUGS = [
     "Opdivo", "Enbrel", "Stelara", "Biktarvy", "Dupixent"
 ]
 
+# TARGET ONTOLOGY (Expanded for better semantic anchor points)
+MEDDRA_TARGETS = [
+    "Vomiting", "Nausea", "Dizziness", "Headache", "Severe Pain", "Fatigue", "Insomnia",
+    "Abdominal Pain", "Diarrhea", "Constipation", "Rash", "Pruritus",
+    "Dyspnea", "Palpitations", "Anxiety", "Depression", "Vertigo",
+    "Tremor", "Alopecia", "Hyperhidrosis", "Pyrexia", "Myalgia",
+    "Blurred Vision", "Tinnitus", "Dry Mouth", "Weight Loss", "Allergic Reaction"
+]
+
 # ==========================================
-# 2. GLOBAL MODEL LOADING (Safe CPU Mode)
+# 2. LOAD MODELS
 # ==========================================
-print("\n⏳ 1. Loading BioBERT (Detector)...")
+print("\n⏳ Loading BioBERT...")
 tokenizer = AutoTokenizer.from_pretrained(BIOBERT_MODEL)
 model = AutoModelForTokenClassification.from_pretrained(BIOBERT_MODEL)
 model.to("cpu")
 print("   ✅ BioBERT Ready.")
 
-print("⏳ 2. Loading Embeddings (RAG Reader)...")
+print(f"⏳ Loading Semantic Brain ({EMBEDDING_MODEL})...")
 embedding_model_cpu = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
-print("   ✅ Embeddings Ready.")
+target_embeddings = embedding_model_cpu.encode(MEDDRA_TARGETS, convert_to_tensor=True)
+print(f"   ✅ Vector Space Ready.")
 
 class ManualEmbeddings:
-    def embed_documents(self, texts):
-        return embedding_model_cpu.encode(texts).tolist()
-    def embed_query(self, text):
-        return embedding_model_cpu.encode(text).tolist()
+    def embed_documents(self, texts): return embedding_model_cpu.encode(texts).tolist()
+    def embed_query(self, text): return embedding_model_cpu.encode(text).tolist()
 
 # ==========================================
-# 3. AGENT LOGIC
+# 3. AGENT NODES
 # ==========================================
 class AgentState(TypedDict):
     post_text: str
     target_drug: str
     detected_entities: List[str]
+    symptom_map: Dict[str, str]
+    standardized_symptoms: List[str]
     rag_evidence: List[str]
     final_report: str
 
 def manual_predict(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-    with torch.no_grad():
-        outputs = model(**inputs)
+    with torch.no_grad(): outputs = model(**inputs)
     predictions = torch.argmax(outputs.logits, dim=2)
     tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
     
     found_symptoms = []
-    found_drugs = []
-    current_entity = ""
-    current_label = None
+    current_entity_words = []
     
+    # FIX: Better logic to reconstruct words with spaces
     for token, prediction in zip(tokens, predictions[0].numpy()):
         label = model.config.id2label[prediction]
-        if label != "O": 
-            clean_token = token[2:] if token.startswith("##") else token
-            if label.startswith("B-"):
-                if current_entity:
-                    if "Chemical" in current_label: found_drugs.append(current_entity)
-                    else: found_symptoms.append(current_entity)
-                current_entity = clean_token
-                current_label = label
-            elif label.startswith("I-") and current_entity:
-                current_entity += clean_token
+        
+        if label == "O":
+            # If we were tracking an entity, save it now
+            if current_entity_words:
+                found_symptoms.append(" ".join(current_entity_words))
+                current_entity_words = []
+            continue
+
+        # Handle Subwords (##ing)
+        clean_token = token
+        if token.startswith("##"):
+            clean_token = token[2:]
+            if current_entity_words:
+                current_entity_words[-1] += clean_token # Attach to previous word
         else:
-            if current_entity:
-                if "Chemical" in current_label: found_drugs.append(current_entity)
-                else: found_symptoms.append(current_entity)
-                current_entity = ""
-                current_label = None
-    if current_entity:
-        if "Chemical" in current_label: found_drugs.append(current_entity)
-        else: found_symptoms.append(current_entity)
-        
-    return list(set(found_symptoms)), list(set(found_drugs))
+            # It's a new word token
+            if label.startswith("B-"):
+                # If we were already tracking, save the previous one
+                if current_entity_words:
+                    found_symptoms.append(" ".join(current_entity_words))
+                    current_entity_words = []
+                current_entity_words.append(clean_token)
+            elif label.startswith("I-"):
+                current_entity_words.append(clean_token)
 
-# --- NODE 1: DETECTOR ---
+    # Catch the last one
+    if current_entity_words:
+        found_symptoms.append(" ".join(current_entity_words))
+        
+    return list(set(found_symptoms)), [] # We ignore drugs for now to focus on symptoms
+
 def detector_node(state: AgentState):
-    print(f"\n🔍 [Detector]: Scanning text...")
-    try:
-        symptoms, drugs = manual_predict(state['post_text'])
-        
-        # Start with a safe default
-        current_target = state.get('target_drug', 'Ozempic')
-        
-        # --- SMART CONTEXT SWITCHING ---
-        # Instead of picking the first match in the LIST, we pick the first match in the TEXT.
-        text_lower = state['post_text'].lower()
-        found_matches = []
-        
-        for drug in KNOWN_DRUGS:
-            index = text_lower.find(drug.lower())
-            if index != -1:
-                # Store (position, drug_name) so we can sort by position
-                found_matches.append((index, drug))
-        
-        if found_matches:
-            # Sort by index (earliest mention wins)
-            found_matches.sort() 
-            current_target = found_matches[0][1]
-            print(f"   🎯 Priority Drug Detected: {current_target} (at char {found_matches[0][0]})")
-        
-        # Fallback: If no known drug keywords found, use BioBERT detected drugs
-        elif drugs:
-            current_target = drugs[0]
+    print(f"\n🔍 [Detector]: Scanning...")
+    symptoms, _ = manual_predict(state['post_text'])
+    
+    # Priority Context Switching
+    current_target = state.get('target_drug', 'Ozempic')
+    text_lower = state['post_text'].lower()
+    for drug in KNOWN_DRUGS:
+        if drug.lower() in text_lower:
+            current_target = drug
+            break
+            
+    print(f"   ✅ Detected: {symptoms}")
+    return {"detected_entities": symptoms, "target_drug": current_target}
 
-        print(f"   ✅ Context Set to: {current_target}")
-        print(f"   ✅ Symptoms: {symptoms}")
+def mapper_node(state: AgentState):
+    raw = state.get("detected_entities", [])
+    if not raw: return {"symptom_map": {}, "standardized_symptoms": []}
+    
+    mapping = {}
+    print(f"🔄 [Mapper]: Vectorizing {raw}...")
+    
+    slang_embeddings = embedding_model_cpu.encode(raw, convert_to_tensor=True)
+    hits = util.semantic_search(slang_embeddings, target_embeddings, top_k=1)
+    
+    for i, hit_list in enumerate(hits):
+        score = hit_list[0]['score']
+        slang_term = raw[i]
+        std_term = MEDDRA_TARGETS[hit_list[0]['corpus_id']]
         
-        return {
-            "detected_entities": symptoms,
-            "target_drug": current_target 
-        }
-    except Exception as e:
-        print(f"   ❌ Detection Error: {e}")
-        return {"detected_entities": []}
+        # LOWER THRESHOLD to catch idioms like "killing me"
+        if score > 0.4: 
+            mapping[slang_term] = std_term
+            print(f"   ✅ '{slang_term}' ➝ '{std_term}' ({score:.2f})")
+        else:
+            print(f"   ⚠️ No match for '{slang_term}' ({score:.2f})")
+            mapping[slang_term] = slang_term # Keep raw
 
-# --- NODE 2: INVESTIGATOR (REAL RAG) ---
+    return {"symptom_map": mapping, "standardized_symptoms": list(set(mapping.values()))}
+
 def investigator_node(state: AgentState):
-    symptoms = state.get("detected_entities", [])
-    target_drug = state.get("target_drug") 
+    terms = state.get("standardized_symptoms", [])
+    target = state.get("target_drug")
+    if not terms: return {"rag_evidence": []}
     
-    if not symptoms:
-        return {"rag_evidence": []}
-
-    print(f"🕵️ [Investigator]: Searching Knowledge Base for {target_drug}...")
+    print(f"🕵️ [Investigator]: Searching for {terms}...")
+    if not os.path.exists(DB_PATH): return {"rag_evidence": ["DB Missing"]}
     
-    if not os.path.exists(DB_PATH):
-        print(f"   ❌ ERROR: Database missing at {DB_PATH}.")
-        return {"rag_evidence": ["Error: Database missing."]}
-
     try:
-        embedder = ManualEmbeddings()
-        vectorstore = Chroma(
-            persist_directory=DB_PATH, 
-            embedding_function=embedder, 
-            collection_name="fda_drug_labels"
-        )
-        
-        evidence = []
-        # Filter strictly by the detected drug
-        docs = vectorstore.similarity_search(
-            f"{target_drug} side effects: {' '.join(symptoms)}", 
-            k=3,
-            filter={"drug_name": target_drug} 
-        )
-        
-        for doc in docs:
-            source = doc.metadata.get('source', 'Unknown File')
-            evidence.append(f"[{source}]: {doc.page_content}")
-        
-        print(f"   ✅ Found {len(evidence)} records for {target_drug}.")
-        return {"rag_evidence": evidence}
-    except Exception as e:
-        print(f"   ⚠️ RAG Error: {e}")
-        return {"rag_evidence": []}
+        vec = Chroma(persist_directory=DB_PATH, embedding_function=ManualEmbeddings(), collection_name="fda_drug_labels")
+        all_docs = []
+        for term in terms:
+            # Better Search Query: "Ozempic side effect vomiting" instead of just "vomiting"
+            docs = vec.similarity_search(f"{target} side effect {term}", k=2, filter={"drug_name": target})
+            all_docs.extend(docs)
+            
+        unique_evidence = list(set([d.page_content for d in all_docs]))
+        return {"rag_evidence": unique_evidence[:3]} # Keep top 3 to reduce noise
+    except: return {"rag_evidence": []}
 
-# --- NODE 3: ANALYST ---
 def analyst_node(state: AgentState):
-    print(f"🧠 [Analyst]: Drafting Report for {state['target_drug']}...")
-    llm = ChatOllama(model="llama3.2:1b", temperature=0)
+    print(f"🧠 [Analyst]: Drafting Report...")
+    llm = ChatOllama(model="llama3.2:1b", temperature=0.1) 
     
+    # UPDATED PROMPT: Forces summary instead of raw dump
     prompt = ChatPromptTemplate.from_template("""
-    You are a Pharmacovigilance Expert. Write a CONCISE Slack report.
-    
-    STRICT FORMATTING:
-    - Use single asterisks for bold headers (e.g. *HEADER*).
-    - No markdown #. 
+    You are Sentinel AI. Analyze this potential Adverse Drug Event.
 
-    DATA:
-    - Target Drug: {drug}
-    - Original Post: "{post}"
-    - Detected Symptoms: {symptoms}
-    - Real FDA Knowledge Base: {evidence}
+    INPUT DATA:
+    - Drug: {drug}
+    - Patient Report: "{post}"
+    - Symptom Analysis: {mapping_str}
+    - FDA Database Matches: {evidence_str}
     
-    OUTPUT TEMPLATE:
+    TASK: Write a clean Markdown report.
     
-    *ORIGINAL REPORT*
-    "{post}"
+    ### 🚨 SENTINEL ALERT: {drug}
     
-    *DETECTED SYMPTOMS*
-    {symptoms}
+    **1. SIGNAL EXTRACTED**
+    > "{post}"
     
-    *FDA EVIDENCE CHECK*
-    - *Drug Checked:* {drug}
-    - *Findings:* (Summarize the RAG data in 1 sentence. Cite source file.)
+    **2. SYMPTOM MAPPING**
+    {mapping_str}
     
-    *VERDICT*
-    (Classify: Known Side Effect vs Potential New Signal)
+    **3. FDA CORRELATION**
+    *Summarize the FDA data below into 1-2 sentences. Do not copy-paste.*
+    {evidence_str}
     
-    *RECOMMENDATION*
-    (One sentence advice)
+    **4. VERDICT**
+    (Based on FDA data, is this a KNOWN side effect? Yes/No)
     """)
     
-    chain = prompt | llm
+    map_str = "\n".join([f"- **{k}** ➝ {v}" for k, v in state['symptom_map'].items()])
+    
+    # Truncate evidence to prevent huge context
+    ev_str = "\n".join([f"- {e[:200]}..." for e in state['rag_evidence']])
+    
+    chain = prompt | llm | StrOutputParser()
     response = chain.invoke({
         "drug": state['target_drug'],
         "post": state['post_text'],
-        "symptoms": ", ".join(state['detected_entities']),
-        "evidence": "\n".join(state['rag_evidence'])
+        "mapping_str": map_str,
+        "evidence_str": ev_str
     })
-    return {"final_report": response.content}
+    return {"final_report": response}
 
-# 5. BUILD GRAPH
+# 4. BUILD GRAPH
 workflow = StateGraph(AgentState)
 workflow.add_node("detector", detector_node)
+workflow.add_node("mapper", mapper_node)
 workflow.add_node("investigator", investigator_node)
 workflow.add_node("analyst", analyst_node)
 
 workflow.set_entry_point("detector")
-workflow.add_edge("detector", "investigator")
+workflow.add_edge("detector", "mapper")
+workflow.add_edge("mapper", "investigator")
 workflow.add_edge("investigator", "analyst")
 workflow.add_edge("analyst", END)
 
 app = workflow.compile()
 
-# 6. EXECUTION TEST
 if __name__ == "__main__":
-    print("🚀 Sentinel API Ready (Smart Context Mode)")
+    print(f"🚀 Sentinel V5 Online (Smart Mapper: {EMBEDDING_MODEL})")
