@@ -1,20 +1,20 @@
 # 2_infrastructure/terraform/main.tf
 
 provider "google" {
-  project = "sentinel-pv-2026"  # Matches your GCP Project ID
+  project = "neuralops" # Matches your GCP Project ID
   region  = "us-east1"
   zone    = "us-east1-b"
 }
 
 # 1. The Firewall (Security Guard)
-# Allows SSH (22) and n8n (5678)
 resource "google_compute_firewall" "sentinel_rules" {
-  name    = "sentinel-allow-n8n"
+  name    = "sentinel-allow-n8n-streamlit"
   network = "default"
 
   allow {
     protocol = "tcp"
-    ports    = ["22", "5678"]
+    # Added 8501 for Streamlit Dashboard
+    ports    = ["22", "5678", "8501"] 
   }
 
   source_ranges = ["0.0.0.0/0"]
