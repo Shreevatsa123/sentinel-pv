@@ -21,7 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate
 # 1. CONFIGURATION
 # ==========================================
 DB_PATH = "./chroma_db_local" 
-BIOBERT_MODEL = "Shreevatsa01/biobert-v2-hybrid-slang" 
+BIOBERT_MODEL = "Shreevatsa01/sentinel-v3-final"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # MASTER DRUG LIST 
