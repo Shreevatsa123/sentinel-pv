@@ -11,7 +11,6 @@ pypdf
 sentence-transformers
 
 # Detection Model
-# We unpin these so they grab the latest 2026 versions
 transformers
 torch 
 accelerate
@@ -21,6 +20,9 @@ python-dotenv
 requests
 beautifulsoup4
 selenium-base
+pydantic-settings  # <--- ADDED THIS
+
+# Web App
 streamlit
 fastapi
 uvicorn
