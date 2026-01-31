@@ -88,7 +88,7 @@ st.markdown(f"## 🚨 Patient Report Simulation: **{target_drug}**")
 col1, col2 = st.columns([3, 1])
 with col1:
     ex = f"Started {target_drug} yesterday. Kept barfing all night and felt super dizzy."
-    input_text = st.text_area("📄 Raw Stream", value=ex, height=150)
+    input_text = st.text_area("📄 Raw Stream", value=ex, height=300)
 with col2:
     st.write("##")
     analyze_btn = st.button("⚡ ANALYZE", type="primary", use_container_width=True)
