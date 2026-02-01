@@ -13,7 +13,7 @@ sys.modules['pydantic.env_settings'] = pydantic.v1
 # ---------------------------------
 
 app = FastAPI()
-FEEDBACK_FILE = "rl_feedback_log.jsonl"
+FEEDBACK_FILE = "../4_frontend/rl_feedback_log.jsonl"
 
 class AnalysisRequest(BaseModel):
     text: str
