@@ -9,3 +9,4 @@ To keep sensitive details private, this project uses a `terraform.tfvars` file w
 
 ```hcl
 project_id = "your-gcp-project-id-here"
+```
