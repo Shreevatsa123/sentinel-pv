@@ -3,6 +3,7 @@
 *.tfstate.backup
 .terraform/
 .terraform.lock.hcl
+terraform.tfvars
 
 # Python
 __pycache__/
@@ -22,5 +23,7 @@ chroma_db_local/
 
 5_FDA_drug_data/
 
+# JSONL files
 rl_feedback_log.jsonl
 gold_standard.jsonl
+raw_reddit_data.jsonl
