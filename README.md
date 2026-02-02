@@ -21,11 +21,6 @@
    * [4_frontend (The User Interface)](#4_frontend-the-user-interface)
 * [6. Quality Assurance & Evaluation (Ragas)](#6-quality-assurance--evaluation-ragas)
 * [7. Infrastructure & Deployment (Terraform)](#7-infrastructure--deployment-terraform)
-* [8. Installation & Setup](#8-installation--setup)
-   * [Prerequisites](#prerequisites)
-   * [Backend Setup](#backend-setup)
-   * [Frontend Setup](#frontend-setup)
-* [9. Usage Guide](#9-usage-guide)
 
 ---
 
