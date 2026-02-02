@@ -1,11 +1,5 @@
 # Sentinel-PV: Autonomous Pharmacovigilance Agent
 
-Here is the clean, professional version of the `README.md` without emojis.
-
----
-
-# Sentinel PV: AI-Powered Pharmacovigilance System
-
 **Sentinel PV** is an advanced AI system designed to detect, analyze, and report potential Adverse Drug Events (ADEs) from unstructured patient narratives (social media). It moves beyond simple keyword matching by employing a **Multi-Agent Architecture** capable of understanding slang, contextualizing symptoms, and verifying findings against official FDA labels.
 
 ---
