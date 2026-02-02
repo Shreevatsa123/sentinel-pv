@@ -126,18 +126,34 @@ This directory contains the **Streamlit** applications that provide a human-read
 * **`dashboard.py`**: The primary simulation interface. It renders the main UI where users can input raw patient narratives. It connects to the `api_service` backend, visualizes the step-by-step reasoning process of each agent (showing the raw detected entities and mapped terms), and displays the final Markdown-formatted Clinical Safety Report.
 * **`admin.py`**: The system diagnostics panel. This interface provides an "under-the-hood" view for administrators. It includes functionality to inspect the contents of the ChromaDB vector store, view raw system logs, and monitor the volume of data ingested by the n8n pipelines.
 
+## 6. Quality Assurance & Evaluation (Ragas)
+
+*Location:* `3_agent_core/evaluate_quality.py`
+
+In a high-stakes domain like pharmacovigilance, "trust but verify" is the golden rule. We cannot rely solely on an LLM's confidence. To address this, we implemented an automated evaluation pipeline using the **Ragas** framework.
+
+* **The Process:** The system logs every agent interaction (inputs, retrieved contexts, and final outputs). The evaluation script parses these logs and uses a separate "Judge LLM" to grade the performance.
+* **Key Metrics:**
+* **Faithfulness:** Measures if the Analyst's report is factually grounded in the retrieved FDA evidence (preventing hallucinations).
+* **Answer Relevancy:** Measures how pertinent the generated safety report is to the specific patient narrative provided.
 
 
+* **Output:** The script generates a detailed CSV report card. A sample evaluation can be found in `demo-files-generated/evaluation_report-DEMO.csv`.
 
-*Sentinel PV represents a leap forward in automated drug safety monitoring, combining the precision of BioBERT with the reasoning capabilities of modern LLMs.*
+## 7. Infrastructure & Deployment (Terraform)
 
-### Configuration (Required)
-To keep sensitive details private, this project uses a `terraform.tfvars` file which is excluded from version control. You must create this file manually.
+*Location:* `2_infrastructure/terraform/`
 
-1.  Navigate to `2_infrastructure/terraform/`.
-2.  Create a file named `terraform.tfvars`.
-3.  Add your specific Google Cloud Project ID inside:
+To ensure the system is reproducible and scalable, the underlying cloud infrastructure is managed using **Terraform** (Infrastructure as Code). This module automates the provisioning of the necessary Google Cloud Platform (GCP) resources required to host the API and Streamlit dashboard.
 
+**Configuration (Required)**
+
+To keep sensitive details private, this project uses a `terraform.tfvars` file which is excluded from version control. You must create this file manually before deploying:
+
+1. Navigate to the directory: `2_infrastructure/terraform/`
+2. Create a file named `terraform.tfvars`.
+3. Add your specific Google Cloud Project ID inside:
 ```hcl
 project_id = "your-gcp-project-id-here"
+
 ```
