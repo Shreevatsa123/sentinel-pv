@@ -134,10 +134,8 @@ In a high-stakes domain like pharmacovigilance, "trust but verify" is the golden
 
 * **The Process:** The system logs every agent interaction (inputs, retrieved contexts, and final outputs). The evaluation script parses these logs and uses a separate "Judge LLM" to grade the performance.
 * **Key Metrics:**
-* **Faithfulness:** Measures if the Analyst's report is factually grounded in the retrieved FDA evidence (preventing hallucinations).
-* **Answer Relevancy:** Measures how pertinent the generated safety report is to the specific patient narrative provided.
-
-
+    * **Faithfulness:** Measures if the Analyst's report is factually grounded in the retrieved FDA evidence (preventing hallucinations).
+    * **Answer Relevancy:** Measures how pertinent the generated safety report is to the specific patient narrative provided.
 * **Output:** The script generates a detailed CSV report card. A sample evaluation can be found in `demo-files-generated/evaluation_report-DEMO.csv`.
 
 ## 7. Infrastructure & Deployment (Terraform)
