@@ -23,25 +23,15 @@ In production (Part B), I designed Sentinel PV as a multi-agent system orchestra
 
 ## Tech Stack
 
-### **Core AI & Machine Learning**
-
-* **LLMs:** `Llama 3.2 (1B & 3B)` via **Ollama** (Local Inference).
-* **NER Model:** Fine-tuned **BioBERT** (`Shreevatsa01/sentinel-v3-final`).
-* **Embeddings:** `sentence-transformers/all-MiniLM-L6-v2`.
-* **Vector Database:** **ChromaDB** (Local persistence).
-* **Frameworks:** **PyTorch**, **Hugging Face Transformers**.
-
-### **Agentic Orchestration & Architecture**
-
+* **LLMs:** Llama 3.2 (1B & 3B) via **Ollama**.
+* **NER Model:** Custom Fine-tuned **BioBERT** (`dmis-lab/biobert-v1.1`).
 * **Orchestration:** **LangGraph** (Stateful Multi-Agent Workflows).
-* **Protocol:** **MCP (Model Context Protocol)** by Anthropic (Client/Server Architecture for FDA Data).
-* **Evaluation:** **Ragas** (RAG Assessment Framework for Quality Control).
-* **API:** **FastAPI** (Asynchronous Backend).
-
-### **Frontend & Data Pipeline**
-
-* **UI/Dashboard:** **Streamlit** (Python-based interactive dashboard).
-* **Automation:** **n8n** (Low-code workflow automation for Reddit Scraping).
+* **Protocol:** **MCP (Model Context Protocol)** by Anthropic (Client/Server Architecture).
+* **Vector DB:** **ChromaDB** with `sentence-transformers/all-MiniLM-L6-v2`.
+* **Backend:** **FastAPI** (Asynchronous).
+* **Frontend:** **Streamlit**.
+* **Automation:** **n8n** (Workflow Automation).
+* **Quality Control:** **Ragas** (RAG Assessment Framework).
 
 ---
 
