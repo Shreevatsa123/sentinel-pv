@@ -14,8 +14,8 @@ In production (Part B), I designed Sentinel PV as a multi-agent system orchestra
 2. [Project Architecture Overview](#project-architecture-overview)
 3. [Part A: The Data Science Core](#part-a-the-data-science-core-model-training)
 4. [Part B: The Intelligent Production System](#part-b-the-intelligent-production-system)
-  * [B1: The Agentic Brain (Simulation)](#b1-the-agentic-brain-frontend--backend)
-  * [B2: The Data Pipeline (n8n)](#b2-the-data-pipeline-n8n-workflow)
+   -  [B1: The Agentic Brain (Simulation)](#b1-the-agentic-brain-frontend--backend)
+   -  [B2: The Data Pipeline (n8n)](#b2-the-data-pipeline-n8n-workflow)
 5. [Key Features & Innovations](#key-features--innovations)
 6. [Installation & Setup](#installation--setup)
 
