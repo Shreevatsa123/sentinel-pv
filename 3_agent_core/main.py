@@ -1,32 +1,31 @@
+import asyncio
 import os
 import sys
-import torch
 import json
+import time
+import torch
 from typing import TypedDict, List, Dict
 from langgraph.graph import StateGraph, END
 
-# --- 2026 COMPATIBILITY PATCH ---
 import pydantic
-from pydantic_settings import BaseSettings
 import pydantic.v1
 sys.modules['pydantic.env_settings'] = pydantic.v1
-# ---------------------------------
 
 from transformers import AutoTokenizer, AutoModelForTokenClassification
-from sentence_transformers import SentenceTransformer, util
-from langchain_chroma import Chroma
+from sentence_transformers import SentenceTransformer
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 # ==========================================
 # 1. CONFIGURATION
 # ==========================================
-DB_PATH = "./chroma_db_local" 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "chroma_db_local")
 BIOBERT_MODEL = "Shreevatsa01/sentinel-v3-final"
-
-# UPGRADE: Using a smarter model for "slang understanding"
-EMBEDDING_MODEL = "all-mpnet-base-v2" 
+EMBEDDING_MODEL = "all-MiniLM-L6-v2" 
 
 KNOWN_DRUGS = [
     "Ozempic", "Wegovy", "Mounjaro", "Zepbound", "Trulicity", 
@@ -35,13 +34,16 @@ KNOWN_DRUGS = [
     "Opdivo", "Enbrel", "Stelara", "Biktarvy", "Dupixent"
 ]
 
-# TARGET ONTOLOGY (Expanded for better semantic anchor points)
 MEDDRA_TARGETS = [
     "Vomiting", "Nausea", "Dizziness", "Headache", "Severe Pain", "Fatigue", "Insomnia",
     "Abdominal Pain", "Diarrhea", "Constipation", "Rash", "Pruritus",
     "Dyspnea", "Palpitations", "Anxiety", "Depression", "Vertigo",
     "Tremor", "Alopecia", "Hyperhidrosis", "Pyrexia", "Myalgia",
-    "Blurred Vision", "Tinnitus", "Dry Mouth", "Weight Loss", "Allergic Reaction"
+    "Blurred Vision", "Tinnitus", "Dry Mouth", "Weight Loss", "Allergic Reaction",
+    "Testicular Pain", "Erectile Dysfunction", "Libido Decreased",
+    "Skin Discoloration", "Cyanosis", "Erythema", "Ecchymosis",
+    "Suicidal Ideation", "Aggression", "Confusion",
+    "Chest Pain", "Edema", "Chills"
 ]
 
 # ==========================================
@@ -55,24 +57,20 @@ print("   ✅ BioBERT Ready.")
 
 print(f"⏳ Loading Semantic Brain ({EMBEDDING_MODEL})...")
 embedding_model_cpu = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
-target_embeddings = embedding_model_cpu.encode(MEDDRA_TARGETS, convert_to_tensor=True)
 print(f"   ✅ Vector Space Ready.")
 
-class ManualEmbeddings:
-    def embed_documents(self, texts): return embedding_model_cpu.encode(texts).tolist()
-    def embed_query(self, text): return embedding_model_cpu.encode(text).tolist()
-
 # ==========================================
-# 3. AGENT NODES
+# 3. HELPER FUNCTIONS
 # ==========================================
-class AgentState(TypedDict):
-    post_text: str
-    target_drug: str
-    detected_entities: List[str]
-    symptom_map: Dict[str, str]
-    standardized_symptoms: List[str]
-    rag_evidence: List[str]
-    final_report: str
+def log_for_ragas(state: dict, final_report: str):
+    log_entry = {
+        "user_input": state['post_text'],
+        "retrieved_contexts": state['rag_evidence'],
+        "generated_answer": final_report,
+        "timestamp": time.time()
+    }
+    with open("ragas_logs.jsonl", "a", encoding='utf-8') as f:
+        f.write(json.dumps(log_entry) + "\n")
 
 def manual_predict(text):
     inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
@@ -83,27 +81,20 @@ def manual_predict(text):
     found_symptoms = []
     current_entity_words = []
     
-    # FIX: Better logic to reconstruct words with spaces
     for token, prediction in zip(tokens, predictions[0].numpy()):
         label = model.config.id2label[prediction]
-        
         if label == "O":
-            # If we were tracking an entity, save it now
             if current_entity_words:
                 found_symptoms.append(" ".join(current_entity_words))
                 current_entity_words = []
             continue
-
-        # Handle Subwords (##ing)
         clean_token = token
         if token.startswith("##"):
             clean_token = token[2:]
             if current_entity_words:
-                current_entity_words[-1] += clean_token # Attach to previous word
+                current_entity_words[-1] += clean_token 
         else:
-            # It's a new word token
             if label.startswith("B-"):
-                # If we were already tracking, save the previous one
                 if current_entity_words:
                     found_symptoms.append(" ".join(current_entity_words))
                     current_entity_words = []
@@ -111,119 +102,181 @@ def manual_predict(text):
             elif label.startswith("I-"):
                 current_entity_words.append(clean_token)
 
-    # Catch the last one
     if current_entity_words:
         found_symptoms.append(" ".join(current_entity_words))
-        
-    return list(set(found_symptoms)), [] # We ignore drugs for now to focus on symptoms
+    return list(set(found_symptoms)), [] 
+
+# ==========================================
+# 4. AGENT NODES
+# ==========================================
+class AgentState(TypedDict):
+    post_text: str
+    target_drug: str
+    detected_entities: List[str]
+    symptom_map: Dict[str, str]
+    standardized_symptoms: List[str]
+    rag_evidence: List[str]
+    final_report: str
 
 def detector_node(state: AgentState):
-    print(f"\n🔍 [Detector]: Scanning...")
+    print(f"\n🔍 [Detector]: Scanning text...")
     symptoms, _ = manual_predict(state['post_text'])
-    
-    # Priority Context Switching
-    current_target = state.get('target_drug', 'Ozempic')
+    current_target = state.get('target_drug', 'Unknown')
     text_lower = state['post_text'].lower()
     for drug in KNOWN_DRUGS:
         if drug.lower() in text_lower:
             current_target = drug
             break
-            
-    print(f"   ✅ Detected: {symptoms}")
+    
+    print(f"   ✅ Identified: {current_target} | Symptoms: {symptoms}")
     return {"detected_entities": symptoms, "target_drug": current_target}
 
 def mapper_node(state: AgentState):
-    raw = state.get("detected_entities", [])
-    if not raw: return {"symptom_map": {}, "standardized_symptoms": []}
+    raw_symptoms = state.get("detected_entities", [])
+    if not raw_symptoms: 
+        return {"symptom_map": {}, "standardized_symptoms": []}
     
-    mapping = {}
-    print(f"🔄 [Mapper]: Vectorizing {raw}...")
+    print(f"🔄 [Mapper]: Normalizing {len(raw_symptoms)} terms...")
+    llm = ChatOllama(model="llama3.2:1b", temperature=0.0)
     
-    slang_embeddings = embedding_model_cpu.encode(raw, convert_to_tensor=True)
-    hits = util.semantic_search(slang_embeddings, target_embeddings, top_k=1)
+    prompt = ChatPromptTemplate.from_template("""
+    You are a strict data converter. 
+    Task: Map the input terms to the standard list.
     
-    for i, hit_list in enumerate(hits):
-        score = hit_list[0]['score']
-        slang_term = raw[i]
-        std_term = MEDDRA_TARGETS[hit_list[0]['corpus_id']]
+    Standard List:
+    {meddra_list}
+    
+    Input Terms:
+    {user_terms}
+    
+    INSTRUCTIONS:
+    1. Output VALID JSON ONLY.
+    2. NO conversational text.
+    3. Map ONLY the Input Terms.
+    
+    Example Input: ["puking", "spinning"]
+    Example JSON: {{ "puking": "Vomiting", "spinning": "Dizziness" }}
+    """)
+    
+    chain = prompt | llm | StrOutputParser()
+    
+    try:
+        raw_output = chain.invoke({
+            "meddra_list": ", ".join(MEDDRA_TARGETS),
+            "user_terms": json.dumps(raw_symptoms)
+        })
         
-        # LOWER THRESHOLD to catch idioms like "killing me"
-        if score > 0.4: 
-            mapping[slang_term] = std_term
-            print(f"   ✅ '{slang_term}' ➝ '{std_term}' ({score:.2f})")
+        # Surgical Extraction of JSON
+        start_index = raw_output.find('{')
+        end_index = raw_output.rfind('}')
+        
+        if start_index != -1 and end_index != -1:
+            clean_json = raw_output[start_index : end_index + 1]
+            mapping_result = json.loads(clean_json)
+            standardized = list(set(mapping_result.values()))
+            print(f"   ✅ Mapped: {mapping_result}")
+            return {"symptom_map": mapping_result, "standardized_symptoms": standardized}
         else:
-            print(f"   ⚠️ No match for '{slang_term}' ({score:.2f})")
-            mapping[slang_term] = slang_term # Keep raw
+            raise ValueError("No JSON found")
+            
+    except Exception:
+        print(f"   ⚠️ Mapper failed, using raw terms.")
+        return {"symptom_map": {k: k for k in raw_symptoms}, "standardized_symptoms": raw_symptoms}
 
-    return {"symptom_map": mapping, "standardized_symptoms": list(set(mapping.values()))}
-
-def investigator_node(state: AgentState):
+async def investigator_node(state: AgentState):
     terms = state.get("standardized_symptoms", [])
     target = state.get("target_drug")
     if not terms: return {"rag_evidence": []}
     
-    print(f"🕵️ [Investigator]: Searching for {terms}...")
-    if not os.path.exists(DB_PATH): return {"rag_evidence": ["DB Missing"]}
+    print(f"🕵️ [Investigator]: Querying FDA Database for {len(terms)} symptoms...")
+    server_script = os.path.join(BASE_DIR, "fda_mcp_server.py")
+    server_params = StdioServerParameters(command=sys.executable, args=[server_script], env=None)
+    
+    collected_evidence = []
     
     try:
-        vec = Chroma(persist_directory=DB_PATH, embedding_function=ManualEmbeddings(), collection_name="fda_drug_labels")
-        all_docs = []
-        for term in terms:
-            # Better Search Query: "Ozempic side effect vomiting" instead of just "vomiting"
-            docs = vec.similarity_search(f"{target} side effect {term}", k=2, filter={"drug_name": target})
-            all_docs.extend(docs)
-            
-        unique_evidence = list(set([d.page_content for d in all_docs]))
-        return {"rag_evidence": unique_evidence[:3]} # Keep top 3 to reduce noise
-    except: return {"rag_evidence": []}
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                
+                # LOOP THROUGH ALL SYMPTOMS (The Fix)
+                for symptom in terms:
+                    print(f"   [DEBUG] Searching for: {symptom}")
+                    result = await session.call_tool(
+                        "search_fda_labels", 
+                        arguments={"drug_name": target, "symptom": symptom}
+                    )
+                    
+                    if hasattr(result, 'content') and isinstance(result.content, list):
+                        for item in result.content:
+                            if hasattr(item, 'text'):
+                                collected_evidence.append(f"[{symptom} Match]: {item.text}")
+                    else:
+                        collected_evidence.append(str(result))
+                
+                # De-duplicate to keep the prompt clean
+                unique_evidence = list(set(collected_evidence))
+                return {"rag_evidence": unique_evidence[:5]} # Limit to top 5 to fit in context
 
+    except Exception as e:
+        print(f"   ⚠️ MCP Connection Error: {e}")
+        return {"rag_evidence": [f"Error: {str(e)}"]}
+    
 def analyst_node(state: AgentState):
-    print(f"🧠 [Analyst]: Drafting Report...")
+    print(f"🧠 [Analyst]: Generating Clinical Report...")
     llm = ChatOllama(model="llama3.2:1b", temperature=0.1) 
     
-    # UPDATED PROMPT: Forces summary instead of raw dump
+    # --- UPGRADED PROMPT FOR BETTER REPORTING ---
     prompt = ChatPromptTemplate.from_template("""
-    You are Sentinel AI. Analyze this potential Adverse Drug Event.
-
+    You are Sentinel AI, a Clinical Safety Analyst.
+    
     INPUT DATA:
     - Drug: {drug}
-    - Patient Report: "{post}"
-    - Symptom Analysis: {mapping_str}
+    - Patient Narrative: "{post}"
+    - Detected Symptoms: {mapping_str}
     - FDA Database Matches: {evidence_str}
     
-    TASK: Write a clean Markdown report.
+    TASK: Write a professional Clinical Safety Report.
     
-    ### 🚨 SENTINEL ALERT: {drug}
+    OUTPUT FORMAT (Markdown):
     
-    **1. SIGNAL EXTRACTED**
+    ### SENTINEL SAFETY SIGNAL
+    
+    **1. SIGNAL DETECTION**
     > "{post}"
     
-    **2. SYMPTOM MAPPING**
-    {mapping_str}
+    **2. SYMPTOM ANALYSIS**
+    *Table of identified terms:*
+    | Patient Term | MedDRA Term |
+    |--------------|-------------|
+    (Insert rows here based on 'Detected Symptoms')
     
-    **3. FDA CORRELATION**
-    *Summarize the FDA data below into 1-2 sentences. Do not copy-paste.*
-    {evidence_str}
+    **3. FDA LABEL CORRELATION**
+    *Evidence Summary:*
+    (Summarize the FDA Database Matches in 1-2 clear sentences. If no data, state "No explicit match found in current label data.")
     
-    **4. VERDICT**
-    (Based on FDA data, is this a KNOWN side effect? Yes/No)
+    **4. CLINICAL ASSESSMENT**
+    (Provide a 2-3 sentence conclusion. Do NOT just say "Yes". Explain: "The reported symptoms [X, Y] are consistent with known side effects listed in the FDA label..." OR "The reported symptoms appear to be novel/unlisted...")
     """)
     
-    map_str = "\n".join([f"- **{k}** ➝ {v}" for k, v in state['symptom_map'].items()])
+    # Format the mapping table rows for the prompt
+    map_rows = "\n".join([f"| {k} | {v} |" for k, v in state['symptom_map'].items()])
+    if not map_rows: map_rows = "| None | None |"
     
-    # Truncate evidence to prevent huge context
     ev_str = "\n".join([f"- {e[:200]}..." for e in state['rag_evidence']])
     
     chain = prompt | llm | StrOutputParser()
     response = chain.invoke({
         "drug": state['target_drug'],
         "post": state['post_text'],
-        "mapping_str": map_str,
+        "mapping_str": map_rows,
         "evidence_str": ev_str
     })
+    
+    log_for_ragas(state, response)
     return {"final_report": response}
 
-# 4. BUILD GRAPH
+# 5. BUILD GRAPH
 workflow = StateGraph(AgentState)
 workflow.add_node("detector", detector_node)
 workflow.add_node("mapper", mapper_node)
@@ -239,4 +292,4 @@ workflow.add_edge("analyst", END)
 app = workflow.compile()
 
 if __name__ == "__main__":
-    print(f"🚀 Sentinel V5 Online (Smart Mapper: {EMBEDDING_MODEL})")
+    print(f"🚀 Sentinel V6 (Clean Production Build) Online")

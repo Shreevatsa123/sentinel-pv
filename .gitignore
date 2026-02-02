@@ -27,3 +27,6 @@ chroma_db_local/
 rl_feedback_log.jsonl
 gold_standard.jsonl
 raw_reddit_data.jsonl
+ragas_logs.jsonl
+
+evaluation_report.csv
