@@ -25,8 +25,6 @@
 * [9. Demo Files Reference](#9-demo-files-reference)
 * [10. Future Roadmap: Reinforcement Learning](#10-future-roadmap-reinforcement-learning)
 
-Future Roadmap: Reinforcement Learning
-
 ---
 
 ## 1. Project Overview
