@@ -70,6 +70,38 @@ To ensure the model understands both clinical and casual language, I utilized a 
 The model was evaluated using standard **Precision**, **Recall**, and **F1-Score** metrics. The training process prioritized maximizing the **Recall** for `ADVERSE_EVENT` tags to ensure the system catches every potential safety signal, minimizing the risk of false negatives in a safety-critical context.
 
 
+## 4. Part B: The Intelligent Production System
+
+*Location:* `/3_agent_core` & `/4_frontend`
+
+This section transforms the research models into a live, autonomous application capable of processing real-world data in real-time. It separates the cognitive "Brain" from the automated "Feeder" to ensure scalability and modularity.
+
+## B1: The Agentic Brain (Simulation & Core)
+
+At the core of the production system lies a stateful **LangGraph** workflow that mimics the cognitive process of a human safety analyst. Rather than relying on a single large model, the system orchestrates a team of specialized agents supported by a vector-based knowledge engine:
+
+* **Detector Agent (Perception):** The first line of defense uses the fine-tuned BioBERT model to scan raw text and extract specific entities (`DRUG` and `ADVERSE_EVENT`), identifying symptoms even when they are buried in informal narrative structures.
+* **Mapper Agent (Normalization):** Acting as a semantic translator, this agent converts detected slang (e.g., "head feeling wobbly") into standardized MedDRA medical terminology. It employs a self-correcting JSON extraction technique to ensure data integrity during the handoff.
+* **The Semantic Knowledge Engine (ChromaDB + MCP):**
+To prevent hallucinations, the system relies on a local **Retrieval-Augmented Generation (RAG)** architecture. We indexed official FDA drug labels into a **ChromaDB** vector database, converting clinical text into mathematical embeddings. This is accessed via the **Model Context Protocol (MCP)**.
+  * **How they work together:** The **Investigator Agent** (acting as an MCP Client) sends a query to the MCP Server. The server then runs a semantic vector search within ChromaDB to find contextually relevant evidence (e.g., matching "room spinning" to "Vertigo"). This decouples the reasoning layer from the knowledge layer, ensuring the agent always cites real, retrieval-based evidence.
+* **Analyst Agent (Reasoning):** The final decision-maker employs a **Chain of Thought (CoT)** reasoning process. It synthesizes the patient's narrative, the mapped clinical terms, and the retrieved FDA evidence to construct a professional Clinical Safety Report, explicitly outlining the logic behind its risk assessment.
+
+### **B2: The Data Pipeline (Automation)**
+
+To ensure the system operates on fresh data rather than static datasets, an automated pipeline ingests patient narratives from the wild.
+
+* **n8n Workflow Integration:**
+The system is fed by an automated low-code workflow that handles the extraction and pre-processing of social media data. The complete workflow configuration is provided in `my-n8n-workflow.json`, which can be imported directly into n8n. This workflow creates a continuous feedback loop, scraping new comments every hour, filtering for safety signals, and pushing them to the analysis API.
+* **Real-Time Reddit Scraping:**
+The pipeline specifically targets high-volume drug subreddits (e.g., r/Ozempic, r/Mounjaro). It utilizes advanced filtering to isolate comments containing keywords indicative of adverse events (such as "pain," "sick," or "stopped taking") before they ever reach the analytical engine.
+
+
+
+
+
+
+
 *Sentinel PV represents a leap forward in automated drug safety monitoring, combining the precision of BioBERT with the reasoning capabilities of modern LLMs.*
 
 ### Configuration (Required)
