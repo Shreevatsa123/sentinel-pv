@@ -17,13 +17,14 @@
    * [B2: The Data Pipeline (Automation)](#b2-the-data-pipeline-automation)
       * [n8n Workflow Integration](#n8n-workflow-integration)
       * [Real-Time Reddit Scraping & Ingestion](#real-time-reddit-scraping--ingestion)
-* [5. Quality Assurance & Evaluation (Ragas)](#5-quality-assurance--evaluation-ragas)
-* [6. Infrastructure & Deployment (Terraform)](#6-infrastructure--deployment-terraform)
-* [7. Installation & Setup](#7-installation--setup)
+* [5. Code structure](#5-quality-assurance--evaluation-ragas)
+* [6. Quality Assurance & Evaluation (Ragas)](#6-quality-assurance--evaluation-ragas)
+* [7. Infrastructure & Deployment (Terraform)](#7-infrastructure--deployment-terraform)
+* [8. Installation & Setup](#8-installation--setup)
    * [Prerequisites](#prerequisites)
    * [Backend Setup](#backend-setup)
    * [Frontend Setup](#frontend-setup)
-* [8. Usage Guide](#8-usage-guide)
+* [9. Usage Guide](#9-usage-guide)
 
 ---
 
