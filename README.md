@@ -21,6 +21,11 @@
    * [4_frontend (The User Interface)](#4_frontend-the-user-interface)
 * [6. Quality Assurance & Evaluation (Ragas)](#6-quality-assurance--evaluation-ragas)
 * [7. Infrastructure & Deployment (Terraform)](#7-infrastructure--deployment-terraform)
+* [8. Usage Guide](#8-usage-guide)
+* [9. Demo Files Reference](#9-demo-files-reference)
+* [10. Future Roadmap: Reinforcement Learning](#10-future-roadmap-reinforcement-learning)
+
+Future Roadmap: Reinforcement Learning
 
 ---
 
@@ -150,3 +155,65 @@ To keep sensitive details private, this project uses a `terraform.tfvars` file w
 project_id = "your-gcp-project-id-here"
 
 ```
+
+## 8. Usage Guide
+
+*Follow these steps to run the full system locally.*
+
+**1. Start the LLM Server**
+Ensure you have Ollama installed and the model pulled.
+
+```bash
+ollama run llama3.2:1b
+
+```
+
+**2. Start the Backend (The Brain)**
+Open a terminal in the `3_agent_core` directory.
+
+```bash
+cd 3_agent_core
+pip install -r requirements.txt
+# This starts the FastAPI server and the LangGraph engine
+uvicorn api_service:app --reload --port 8000
+
+```
+
+**3. Start the Frontend (The Dashboard)**
+Open a new terminal in the `4_frontend` directory.
+
+```bash
+cd 4_frontend
+pip install streamlit
+streamlit run dashboard.py
+
+```
+
+*Access the dashboard at: `http://localhost:8501*`
+
+**4. (Optional) Run the Data Pipeline**
+If you have n8n installed, import `my-n8n-workflow.json` and execute it. Alternatively, manually trigger a scrape:
+
+```bash
+python 3_agent_core/ingest_reddit_history.py
+
+```
+
+
+## 9. Demo Files Reference
+
+*Location:* `demo-files-generated/`
+
+We have provided sample outputs to help you understand the data schema without needing to run the full scraper or evaluation pipeline immediately.
+
+* **`raw_reddit_data-DEMO.jsonl`**: A snapshot of raw comments scraped from r/Ozempic and r/Mounjaro. This is exactly what the **Detector Agent** receives as input.
+* **`ragas_logs-DEMO.jsonl`**: A log file capturing the internal "thoughts" and "actions" of the agents during a live session. This includes the retrieved FDA context and the raw LLM responses.
+* **`evaluation_report-DEMO.csv`**: The output from the Quality Assurance module. It contains row-by-row grading of the agents, showing scores for **Faithfulness** (did it hallucinate?) and **Relevancy** (did it answer the prompt?).
+* **`gold_standard-DEMO.jsonl`**: A set of human-verified examples used as the "Ground Truth" to benchmark the model's performance.
+
+
+## 10. Future Roadmap: Reinforcement Learning
+
+The current system operates as an "Open Loop," relying on pre-trained models and prompt engineering. The next phase of development focuses on closing this loop with **Reinforcement Learning from Human Feedback (RLHF)**.
+
+We are building a feedback interface where human safety experts can review and edit the generated Clinical Safety Reports. These edits will be captured as "preference data" (e.g., *Chosen Response* vs. *Rejected Response*). This data will feed into a **Direct Preference Optimization (DPO)** pipeline to fine-tune the Analyst Agent, teaching it to align more closely with professional medical standards and reduce the need for manual corrections over time.
