@@ -48,7 +48,6 @@ In production (Part B), I designed Sentinel PV as a multi-agent system orchestra
 * **Automation:** **n8n** (Workflow Automation).
 * **Quality Control:** **Ragas** (RAG Assessment Framework).
 
----
 
 Here is the updated **Part A** section, including the specific Reddit scraper details as requested.
 
@@ -57,10 +56,10 @@ Here is the updated **Part A** section, including the specific Reddit scraper de
 *Location:* `1_data_science/notebooks/sentinel_pv_v3.ipynb`
 
 ### **BioBERT Fine-Tuning Strategy**
-We fine-tuned the `dmis-lab/biobert-v1.1` model specifically for Token Classification to detect `DRUG` and `ADVERSE_EVENT` entities. This specialized training enables the system to parse unstructured social media text and identify symptoms even when hidden amidst slang or informal grammar.
+I fine-tuned the `dmis-lab/biobert-v1.1` model specifically for Token Classification to detect `DRUG` and `ADVERSE_EVENT` entities. This specialized training enables the system to parse unstructured social media text and identify symptoms even when hidden amidst slang or informal grammar.
 
 ### **Hybrid Dataset Approach (CADEC + Scraped Reddit Data)**
-To ensure the model understands both clinical and casual language, we utilized a dual-source corpus:
+To ensure the model understands both clinical and casual language, I utilized a dual-source corpus:
 
 * **CADEC:** A gold-standard dataset for establishing medical precision.
 * **Scraped Reddit Data:** A custom dataset of ~8,000 comments from drug-specific subreddits (e.g., r/Ozempic) to expose the model to real-world typos and slang.
@@ -71,7 +70,6 @@ To ensure the model understands both clinical and casual language, we utilized a
 ### **Model Evaluation Metrics**
 The model was evaluated using standard **Precision**, **Recall**, and **F1-Score** metrics. The training process prioritized maximizing the **Recall** for `ADVERSE_EVENT` tags to ensure the system catches every potential safety signal, minimizing the risk of false negatives in a safety-critical context.
 
----
 
 *Sentinel PV represents a leap forward in automated drug safety monitoring, combining the precision of BioBERT with the reasoning capabilities of modern LLMs.*
 
