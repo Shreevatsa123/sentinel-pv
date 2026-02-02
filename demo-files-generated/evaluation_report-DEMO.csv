@@ -1,0 +1,43 @@
+user_input,retrieved_contexts,response,faithfulness,answer_relevancy
+Started Rybelsus yesterday. Experienced severe nausea and dizziness throughout the night.,"[""Error: ClientSession.__init__() missing 1 required positional argument: 'write_stream'""]","**SIGNAL EXTRACTED**
+
+* ""Started Rybelsus yesterday.""
+* ""Experienced severe nausea and dizziness throughout the night.""
+
+**SYMPTOM MAPPING (CORRECTED)**
+
+* **Slang** ➝ Standard Term
+  - Nausea: Nausea
+  - Dizziness: Vomiting
+* **Preliminary AI Mappings**: 
+  - dizziness: Vomiting
+  - severe nausea: Nausea
+- FDA Database Evidence:
+  - Error: ClientSession.__init__() missing 1 required positional argument: 'write_stream'...
+
+**DATABASE REFERENCE**
+
+* Summary of relevant database entries:
+  - Error: ClientSession.__init__() missing 1 required positional argument: 'write_stream'... (This error is not directly related to the provided text, but rather a general issue with the client session initialization process.)
+
+**DATA CORRELATION**
+
+The provided text does not mention any specific side effects that are confirmed by the database.",,0.28867702
+Started Ozempic yesterday. Experienced severe nausea and dizziness throughout the night.,"['help reduce your chance of dehydration. \n• serious allergic reactions. Stop using OZEMPIC and get medical help right away, if you have any symptoms of a \nserious allergic reaction including itching, rash, or difficulty breathing. \nThe most common side effects of OZEMPIC may include nausea, vomiting, diarrhea, stomach (abdominal) pain and \nconstipation.  \nTalk to your healthcare provider about any side effect that bothers you or does not go away. These are not all the \npossible side effects of OZEMPIC.  \nCall your doctor for medical advice about side effects. You may report side effects to FDA at 1- 800-FDA-1088. \nGeneral information about the safe and effective use of OZEMPIC. \nMedicines are sometimes prescribed for purposes other than those listed in a Medication Guide.  Do not use OZEMPIC for \na condition for which it was not prescribed. Do not give OZEMPIC to other people, even if they have the same symptoms \nthat you have. It may harm them.', 'Ins\ntructions \nInform\n patients of the potential risks and benefits of OZEMPIC and of alternative modes of therapy. Inform \npatients about the importance of adherence to dietary instructions, regular physical activity, periodic blood \nglucose monitoring and A1c testing, recognition and management of hypoglycemia and hyperglycemia, and \nassessment for diabetes complications. Advise patients to seek medical advice promptly during periods of stress \nsuch as fever, trauma, infection, or surgery as medication requirements may change. \n \nAdvise patients that the most common side effects of OZEMPIC are nausea, vomiting, diarrhea, abdominal pain \nand constipation. Inform patients that nausea, vomiting and diarrhea are most common when first starting \nOZEMPIC, but decreases over time in the majority of patients. \n \nInstruct patients to reread the Medication Guide each time the prescription is renewed.  \n \nInform patients if a dose is missed,', 'Medication Guide \nOZEMPIC® (oh-ZEM-pick) \n(semaglutide)  \ninjection, for subcutaneous use \nDo not share your OZEMPIC pen with other people, even if the needle has been changed.  You may give other \npeople a serious infection, or get a serious infection from them.  \nRead this Medication Guide before you start using OZEMPIC and each time you get a refill. There may be new \ninformation. This information does not take the place of talking to your healthcare provider about your medical condition or \nyour treatment.   \nWhat is the most important information I should know about OZEMPIC ? \nOZEMPIC may cause serious side effects, including: \n• Possible thyroid tumors, including cancer. Tell your healthcare provider if you get a lump or swelling in your neck, \nhoarseness, trouble swallowing, or shortness of breath. These may be symptoms of thyroid cancer. In studies with \nrodents, OZEMPIC and medicines that work like OZEMPIC caused thyroid tumors, including thyroid cancer. It is not']","**1. SIGNAL EXTRACTED**
+> Started Ozempic yesterday. Experienced severe nausea and dizziness throughout the night.
+
+**2. SYMPTOM MAPPING**
+- Severe Nausea ➝ Severe Nausea
+- Dizziness ➝ Dizziness
+
+**3. DATABASE EVIDENCE**
+FDA Evidence: ""No data available"" for serious allergic reactions, but it mentions that patients should be aware of the potential risks and benefits of Ozempic.
+
+**4. DATA CORRELATION**
+Yes",,0.162522981
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
+,,,,
