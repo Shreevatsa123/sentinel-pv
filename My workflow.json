@@ -1,0 +1,324 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        192,
+        0
+      ],
+      "id": "90cf4eb9-9de2-4e83-a1df-66349aca6264",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0AAY3U8Z8F",
+          "mode": "id"
+        },
+        "text": "={{ $node[\"FastAPI Analyze\"].json[\"report\"] }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "7330770e-69fc-4f38-bb12-478198ea9652",
+      "name": "Send a message",
+      "webhookId": "b9963caa-a6a1-4bce-8f3b-3adb4240e5a6",
+      "credentials": {
+        "slackApi": {
+          "id": "KKB0mxiNB6fxhG5K",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "5f57da75-54ef-4ec0-baa9-88c6a31caf4b",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "https://api.pullpush.io/reddit/search/comment/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.drug_name }}"
+            },
+            {
+              "name": "size",
+              "value": "3"
+            },
+            {
+              "name": "after",
+              "value": "=0"
+            },
+            {
+              "name": "sort",
+              "value": "desc"
+            },
+            {
+              "name": "subreddit",
+              "value": "={{ $json.drug_name }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Sentinel-PV/1.0"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1184,
+        0
+      ],
+      "id": "ccd023bd-3afc-455e-9618-98974ca88bed",
+      "name": "Reddit Search"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/analyze",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\nJSON.stringify({\n  \"text\": $json.text,\n  \"drug_name\": $json.drug_name\n})\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1568,
+        0
+      ],
+      "id": "3191b3ef-d742-41b7-bf14-eeabfd6ad46e",
+      "name": "FastAPI Analyze"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the drug name from the loop node (Name matches your canvas)\n// Note: We use .json.drug_name to grab the drug currently being processed\nconst drugName = $node[\"Read Drugs\"].json[\"drug_name\"];\n\n// Get the list of comments from the previous node (Reddit Search)\nconst posts = $input.first().json.data;\n\n// If no posts were found, return empty so it doesn't crash\nif (!posts || posts.length === 0) {\n  return [];\n}\n\n// Convert each Reddit post into a separate item\nreturn posts.map(post => ({\n  json: {\n    text: post.body,\n    drug_name: drugName,\n    source: \"Reddit/r/\" + post.subreddit,\n    id: post.id\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        0
+      ],
+      "id": "ac775b20-b687-429d-9854-4d64bc17e6f1",
+      "name": "Split comments"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  { json: { drug_name: \"Ozempic\" } },\n  { json: { drug_name: \"Wegovy\" } },\n  { json: { drug_name: \"Mounjaro\" } },\n  { json: { drug_name: \"Zepbound\" } },\n  { json: { drug_name: \"Trulicity\" } },\n  { json: { drug_name: \"Victoza\" } },\n  { json: { drug_name: \"Rybelsus\" } },\n  { json: { drug_name: \"Jardiance\" } },\n  { json: { drug_name: \"Farxiga\" } },\n  { json: { drug_name: \"Januvia\" } },\n  { json: { drug_name: \"Eliquis\" } },\n  { json: { drug_name: \"Xarelto\" } },\n  { json: { drug_name: \"Entresto\" } },\n  { json: { drug_name: \"Humira\" } },\n  { json: { drug_name: \"Keytruda\" } },\n  { json: { drug_name: \"Opdivo\" } },\n  { json: { drug_name: \"Enbrel\" } },\n  { json: { drug_name: \"Stelara\" } },\n  { json: { drug_name: \"Biktarvy\" } },\n  { json: { drug_name: \"Dupixent\" } }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "bddb5c75-1b62-483a-ac92-6d5237f3721b",
+      "name": "FDA Drugs"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  return {\n    json: {\n      // --- THE MAGIC LINE ---\n      ...item.json, \n      // This \"...\" copies \"drug_name\" (and everything else) \n      // from the Loop node into this node's output.\n      \n      // You can add new variables below if you need them, \n      // but the line above ensures drug_name is NOT lost.\n    }\n  }\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        0
+      ],
+      "id": "903f10f2-1387-440a-ac61-e5f1e1add3d4",
+      "name": "Read Drugs"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1008,
+        0
+      ],
+      "id": "a332bdfc-3f82-48a0-a447-072771dd6449",
+      "name": "Wait",
+      "webhookId": "e41ad5f6-d1dc-449a-a9b4-17667e4920b3"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      data: [\n        {\n          \"body\": \"I've been on Mounjaro for a month and while the weight loss is great, I have these awful sulfur burps and severe stomach pain after I eat.\",\n          \"subreddit\": \"Mounjaro\",\n          \"id\": \"mock_test_01\"\n        },\n        {\n          \"body\": \"Has anyone on Humira experienced numbness in their legs? I took my injection yesterday and now my feet feel tingly and I'm having trouble walking.\",\n          \"subreddit\": \"Humira\",\n          \"id\": \"mock_test_02\"\n        },\n        {\n          \"body\": \"My doctor put me on Dupixent for my eczema. My skin is better but my eyes are incredibly red, itchy, and crusty. Is this related?\",\n          \"subreddit\": \"eczeMABs\",\n          \"id\": \"mock_test_03\"\n        },\n        {\n          \"body\": \"Just started Zepbound last week. I feel physically fine but I'm having extremely vivid nightmares and waking up sweating every night. I shit wavvy with heavy boner, all i want is sex and fuck\",\n          \"subreddit\": \"Zepbound\",\n          \"id\": \"mock_test_04\"\n        }\n      ]\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1040
+      ],
+      "id": "57064ba2-4b6d-4e7d-ad05-deb9c9e709e7",
+      "name": "Mock Reddit"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "FDA Drugs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Read Drugs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Read Drugs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reddit Search": {
+      "main": [
+        [
+          {
+            "node": "Split comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FastAPI Analyze": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split comments": {
+      "main": [
+        [
+          {
+            "node": "FastAPI Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FDA Drugs": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Drugs": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Reddit Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Reddit": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "fd5a2b13-71cc-42e3-ac85-21508e7c03f1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ecd576646fe758b84e4b96d07b6cb8135be9b125d760537748535cae7de23f95"
+  },
+  "id": "6pGXy9FG1iN1TbdAdiovf",
+  "tags": []
+}
