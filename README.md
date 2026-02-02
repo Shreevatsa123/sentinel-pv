@@ -91,16 +91,39 @@ To prevent hallucinations, the system relies on a local **Retrieval-Augmented Ge
 
 To ensure the system operates on fresh data rather than static datasets, an automated pipeline ingests patient narratives from the wild.
 
-* **n8n Workflow Integration:**
+#### **n8n Workflow Integration:**
 The system is fed by an automated low-code workflow that handles the extraction and pre-processing of social media data. The complete workflow configuration is provided in `my-n8n-workflow.json`, which can be imported directly into n8n. This workflow creates a continuous feedback loop, scraping new comments every hour, filtering for safety signals, and pushing them to the analysis API.
 
 ![Alt text](images/image.png)
 
-* **Real-Time Reddit Scraping:**
-The pipeline specifically targets high-volume drug subreddits (e.g., r/Ozempic, r/Mounjaro). It utilizes advanced filtering to isolate comments containing keywords indicative of adverse events (such as "pain," "sick," or "stopped taking") before they ever reach the analytical engine.
+This workflow acts as the automated feeder for the Sentinel PV system. Instead of waiting for manual input, it proactively monitors social media for safety signals.
+
+- Trigger: The process initiates automatically via a Schedule Trigger (currently set to run daily at 02:00).
+- Data Source: It utilizes a Code Node to load a target list of FDA-monitored drugs (e.g., Ozempic, Mounjaro).
+- Acquisition Loop: The workflow iterates through this drug list, using the Reddit Search Node to fetch the most recent comments and posts discussing these medications.
+- Analysis: Raw text is extracted and sent via an HTTP Request to the local Sentinel PV API (POST http://localhost:8000/analyze), where the AI agents process the data.
+- Alerting: Finally, the generated Clinical Safety Report is formatted and pushed directly to a Slack Channel for immediate review by the safety team.
 
 
+## 5. Code Structure
 
+### **`3_agent_core/` (The Backend & Intelligence)**
+
+This directory contains the entire logic of the multi-agent system, the database connectors, and the API layer.
+
+* **`main.py`**: The central nervous system of the project. It uses **LangGraph** to define the `StateGraph` workflow, explicitly mapping the edges between the four agent nodes (`detector`, `mapper`, `investigator`, `analyst`). It holds the `AgentState` schema definitions and acts as the entry point for the compiled runnable graph.
+* **`api_service.py`**: The production gateway. Implemented using **FastAPI**, this script exposes the `POST /analyze` endpoint. It handles asynchronous request processing, allowing external tools (like the n8n workflow or the frontend) to submit text payloads to the LangGraph workflow without blocking the server.
+* **`fda_mcp_server.py`**: The implementation of the **Model Context Protocol (MCP)**. This script runs a standalone MCP server that wraps the local ChromaDB instance as a callable tool named `search_fda_labels`. It manages the standard input/output streams that allow the Investigator Agent to "talk" to the database securely.
+* **`ingest_knowledge.py`**: The "Knowledge Builder" script. It is responsible for initializing the system's long-term memory. It reads raw FDA drug label text, splits it into semantically meaningful chunks, generates vector embeddings using `all-MiniLM-L6-v2`, and persists them into the local **ChromaDB** vector store.
+* **`ingest_reddit_history.py`**: The data acquisition utility. This script connects to the Reddit API (or scrapes via public endpoints) to fetch historical comment threads from targeted subreddits (e.g., r/Ozempic). It performs initial cleaning and formatting, outputting the `raw_reddit_data.jsonl` file used for testing and training.
+* **`evaluate_quality.py`**: The automated grader. This script parses the system's interaction logs (`ragas_logs.jsonl`) and uses the **Ragas** framework to compute `Faithfulness` and `Answer Relevancy` scores. It generates a CSV report card to objectively measure if the Analyst Agent is hallucinating or staying true to the FDA data.
+
+### **`4_frontend/` (The User Interface)**
+
+This directory contains the **Streamlit** applications that provide a human-readable window into the AI's operations.
+
+* **`dashboard.py`**: The primary simulation interface. It renders the main UI where users can input raw patient narratives. It connects to the `api_service` backend, visualizes the step-by-step reasoning process of each agent (showing the raw detected entities and mapped terms), and displays the final Markdown-formatted Clinical Safety Report.
+* **`admin.py`**: The system diagnostics panel. This interface provides an "under-the-hood" view for administrators. It includes functionality to inspect the contents of the ChromaDB vector store, view raw system logs, and monitor the volume of data ingested by the n8n pipelines.
 
 
 
