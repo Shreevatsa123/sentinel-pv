@@ -49,8 +49,6 @@ In production (Part B), I designed Sentinel PV as a multi-agent system orchestra
 * **Quality Control:** **Ragas** (RAG Assessment Framework).
 
 
-Here is the updated **Part A** section, including the specific Reddit scraper details as requested.
-
 ## 3. Part A: The Data Science Core (Model Training)
 
 *Location:* `1_data_science/notebooks/sentinel_pv_v3.ipynb`
