@@ -93,6 +93,9 @@ To ensure the system operates on fresh data rather than static datasets, an auto
 
 * **n8n Workflow Integration:**
 The system is fed by an automated low-code workflow that handles the extraction and pre-processing of social media data. The complete workflow configuration is provided in `my-n8n-workflow.json`, which can be imported directly into n8n. This workflow creates a continuous feedback loop, scraping new comments every hour, filtering for safety signals, and pushing them to the analysis API.
+
+![Alt text](images/image.png)
+
 * **Real-Time Reddit Scraping:**
 The pipeline specifically targets high-volume drug subreddits (e.g., r/Ozempic, r/Mounjaro). It utilizes advanced filtering to isolate comments containing keywords indicative of adverse events (such as "pain," "sick," or "stopped taking") before they ever reach the analytical engine.
 
