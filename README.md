@@ -17,6 +17,8 @@
    * [B2: The Data Pipeline (Automation)](#b2-the-data-pipeline-automation)
       * [n8n Workflow Integration](#n8n-workflow-integration)
 * [5. Code structure](#5-code-structure)
+   * [3_agent_core/ (The Backend & Intelligence)](#3-agent-core--the-backend--intelligence)
+   * [4_frontend/ (The User Interface)](#backend-setup)
 * [6. Quality Assurance & Evaluation (Ragas)](#6-quality-assurance--evaluation-ragas)
 * [7. Infrastructure & Deployment (Terraform)](#7-infrastructure--deployment-terraform)
 * [8. Installation & Setup](#8-installation--setup)
@@ -106,7 +108,7 @@ This workflow acts as the automated feeder for the Sentinel PV system. Instead o
 
 ## 5. Code Structure
 
-### **`3_agent_core/` (The Backend & Intelligence)**
+### **3_agent_core/ (The Backend & Intelligence)**
 
 This directory contains the entire logic of the multi-agent system, the database connectors, and the API layer.
 
@@ -117,7 +119,7 @@ This directory contains the entire logic of the multi-agent system, the database
 * **`ingest_reddit_history.py`**: The data acquisition utility. This script connects to the Reddit API (or scrapes via public endpoints) to fetch historical comment threads from targeted subreddits (e.g., r/Ozempic). It performs initial cleaning and formatting, outputting the `raw_reddit_data.jsonl` file used for testing and training.
 * **`evaluate_quality.py`**: The automated grader. This script parses the system's interaction logs (`ragas_logs.jsonl`) and uses the **Ragas** framework to compute `Faithfulness` and `Answer Relevancy` scores. It generates a CSV report card to objectively measure if the Analyst Agent is hallucinating or staying true to the FDA data.
 
-### **`4_frontend/` (The User Interface)**
+### **4_frontend/ (The User Interface)**
 
 This directory contains the **Streamlit** applications that provide a human-readable window into the AI's operations.
 
