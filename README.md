@@ -16,7 +16,6 @@
       * [Interactive Dashboard (Streamlit)](#interactive-dashboard-streamlit)
    * [B2: The Data Pipeline (Automation)](#b2-the-data-pipeline-automation)
       * [n8n Workflow Integration](#n8n-workflow-integration)
-      * [Real-Time Reddit Scraping & Ingestion](#real-time-reddit-scraping--ingestion)
 * [5. Code structure](#5-quality-assurance--evaluation-ragas)
 * [6. Quality Assurance & Evaluation (Ragas)](#6-quality-assurance--evaluation-ragas)
 * [7. Infrastructure & Deployment (Terraform)](#7-infrastructure--deployment-terraform)
